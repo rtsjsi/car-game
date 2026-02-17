@@ -44,6 +44,8 @@
       border-radius: 8px;
       max-width: 100%;
       height: auto;
+      outline: none;
+      cursor: pointer;
     }
 
     .score-board {
@@ -96,8 +98,10 @@
     }
 
     @media (min-width: 768px) {
-      .controls {
-        display: none;
+      .control-btn {
+        width: 70px;
+        height: 70px;
+        font-size: 1.5rem;
       }
     }
 
@@ -173,13 +177,13 @@
       <p>Score: <strong id="finalScore">0</strong></p>
       <button class="start-btn" id="restartBtn">Play Again</button>
     </div>
-    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    <canvas id="gameCanvas" width="400" height="600" tabindex="0"></canvas>
   </div>
   <div class="controls">
-    <button class="control-btn left" id="leftBtn">◀</button>
-    <button class="control-btn right" id="rightBtn">▶</button>
+    <button type="button" class="control-btn left" id="leftBtn">◀</button>
+    <button type="button" class="control-btn right" id="rightBtn">▶</button>
   </div>
-  <p class="desktop-hint">Use ← → arrow keys to steer</p>
+  <p class="desktop-hint">Use ← → arrow keys, tap canvas, or use buttons to steer</p>
 
   <script>
     const canvas = document.getElementById('gameCanvas');
@@ -330,6 +334,7 @@
       document.getElementById('gameOverOverlay').classList.add('hidden');
       initGame();
       gameRunning = true;
+      canvas.focus();
       gameLoop();
     }
 
@@ -344,34 +349,60 @@
     document.getElementById('startBtn').addEventListener('click', startGame);
     document.getElementById('restartBtn').addEventListener('click', startGame);
 
+    function moveLeft() {
+      if (gameRunning && player.lane > 0) player.lane--;
+    }
+    function moveRight() {
+      if (gameRunning && player.lane < LANES - 1) player.lane++;
+    }
+
     document.getElementById('leftBtn').addEventListener('touchstart', (e) => {
       e.preventDefault();
-      if (player.lane > 0) player.lane--;
+      moveLeft();
     }, { passive: false });
 
     document.getElementById('rightBtn').addEventListener('touchstart', (e) => {
       e.preventDefault();
-      if (player.lane < LANES - 1) player.lane++;
+      moveRight();
     }, { passive: false });
 
     document.getElementById('leftBtn').addEventListener('mousedown', (e) => {
       e.preventDefault();
-      if (gameRunning && player.lane > 0) player.lane--;
+      moveLeft();
     });
 
     document.getElementById('rightBtn').addEventListener('mousedown', (e) => {
       e.preventDefault();
-      if (gameRunning && player.lane < LANES - 1) player.lane++;
+      moveRight();
+    });
+
+    // Tap left/right on canvas for mobile
+    canvas.addEventListener('touchstart', (e) => {
+      if (!gameRunning) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const x = (touch.clientX - rect.left) / rect.width;
+      if (x < 0.5) moveLeft();
+      else moveRight();
+    }, { passive: false });
+
+    canvas.addEventListener('click', (e) => {
+      if (!gameRunning) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width;
+      if (x < 0.5) moveLeft();
+      else moveRight();
     });
 
     document.addEventListener('keydown', (e) => {
       if (!gameRunning) return;
-      if (e.key === 'ArrowLeft' && player.lane > 0) {
+      if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        player.lane--;
-      } else if (e.key === 'ArrowRight' && player.lane < LANES - 1) {
+        moveLeft();
+      } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        player.lane++;
+        moveRight();
       }
     });
 
