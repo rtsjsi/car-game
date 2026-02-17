@@ -87,6 +87,7 @@
     }
 
     .score-bar {
+      position: relative;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -108,6 +109,25 @@
       color: var(--accent);
       font-size: 1.1rem;
       margin-left: 6px;
+    }
+
+    .boost-indicator {
+      position: absolute;
+      top: 12px;
+      right: 20px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.75rem;
+      color: var(--accent);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .boost-indicator.active {
+      opacity: 1;
+      animation: boost-pulse 0.5s ease infinite alternate;
+    }
+    @keyframes boost-pulse {
+      from { opacity: 0.8; }
+      to { opacity: 1; }
     }
 
     #gameCanvas {
@@ -235,6 +255,7 @@
       <div class="score-bar">
         <span>Score <strong id="score">0</strong></span>
         <span>Best <strong id="best">0</strong></span>
+        <span class="boost-indicator" id="boostIndicator">TURBO</span>
       </div>
       <div id="startOverlay" class="overlay">
         <h2>Ready to Race</h2>
@@ -256,8 +277,8 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
       </button>
     </div>
-    <p class="hint desktop-hint">Arrow keys or tap canvas to steer</p>
-    <p class="hint mobile-hint">Swipe or tap to steer</p>
+    <p class="hint desktop-hint">Arrow keys to steer · Tap anywhere for speed boost</p>
+    <p class="hint mobile-hint">Swipe to steer · Tap anywhere for speed boost</p>
   </div>
 
   <script>
@@ -282,6 +303,15 @@
     const LANES = 3;
     let obstacles = [];
     let roadOffset = 0;
+    let boostActive = false;
+    let boostEndTime = 0;
+    const BOOST_DURATION = 2500;
+    const BOOST_MULTIPLIER = 1.6;
+    let isCrashing = false;
+    let crashFrame = 0;
+    const CRASH_DURATION = 45;
+    let lastTouchTime = 0;
+    const TOUCH_DEBOUNCE = 150;
 
     function initGame() {
       const laneWidth = canvas.width / LANES;
@@ -293,8 +323,11 @@
       obstacles = [];
       score = 0;
       roadOffset = 0;
+      boostActive = false;
+      isCrashing = false;
       document.getElementById('score').textContent = '0';
       document.getElementById('best').textContent = bestScore;
+      document.getElementById('boostIndicator').classList.remove('active');
     }
 
     const OBSTACLE_COLORS = ['#00d4aa', '#3b82f6', '#a855f7', '#f59e0b', '#ec4899'];
@@ -338,8 +371,26 @@
     function update() {
       if (!gameRunning) return;
 
+      if (isCrashing) {
+        crashFrame++;
+        if (crashFrame >= CRASH_DURATION) {
+          gameOver();
+        }
+        draw();
+        if (gameRunning) animationId = requestAnimationFrame(gameLoop);
+        return;
+      }
+
+      const now = Date.now();
+      if (boostActive && now > boostEndTime) {
+        boostActive = false;
+        document.getElementById('boostIndicator').classList.remove('active');
+      }
+
       const laneWidth = canvas.width / LANES;
-      roadOffset += 6;
+      const baseSpeed = 4 + score * 0.008;
+      const speed = boostActive ? baseSpeed * BOOST_MULTIPLIER : baseSpeed;
+      roadOffset += boostActive ? 10 : 6;
       if (roadOffset > 45) roadOffset = 0;
 
       player.x = laneWidth * player.lane + (laneWidth - player.width) / 2;
@@ -347,7 +398,7 @@
       if (Math.random() < 0.018) createObstacle();
 
       for (let i = obstacles.length - 1; i >= 0; i--) {
-        obstacles[i].y += 4 + score * 0.008;
+        obstacles[i].y += speed;
         if (obstacles[i].y > canvas.height) {
           obstacles.splice(i, 1);
           score += 10;
@@ -360,11 +411,13 @@
         }
       }
 
+      const overlapMargin = 8;
       for (const obs of obstacles) {
-        if (player.lane === obs.lane &&
-            player.y < obs.y + obs.height &&
-            player.y + player.height > obs.y) {
-          gameOver();
+        const overlapX = Math.min(player.x + player.width - overlapMargin, obs.x + obs.width - overlapMargin) - Math.max(player.x + overlapMargin, obs.x + overlapMargin);
+        const overlapY = Math.min(player.y + player.height - overlapMargin, obs.y + obs.height - overlapMargin) - Math.max(player.y + overlapMargin, obs.y + overlapMargin);
+        if (overlapX > 0 && overlapY > 0) {
+          isCrashing = true;
+          crashFrame = 0;
           return;
         }
       }
@@ -411,55 +464,65 @@
       ctx.stroke();
     }
 
-    function drawCar(x, y, w, h, color, up) {
+    function drawLamborghini(x, y, w, h, color, up, shakeX = 0, shakeY = 0) {
       const d = up ? 1 : -1;
-      const cx = x + w / 2;
-      const cy = y + h / 2;
+      const cx = x + w / 2 + shakeX;
+      const cy = y + h / 2 + shakeY;
 
       ctx.save();
 
       ctx.beginPath();
-      ctx.moveTo(cx, cy - d * h * 0.4);
-      ctx.bezierCurveTo(cx + w * 0.45, cy - d * h * 0.32, cx + w * 0.45, cy + d * h * 0.35, cx + w * 0.32, cy + d * h * 0.42);
-      ctx.lineTo(cx + w * 0.12, cy + d * h * 0.45);
-      ctx.lineTo(cx, cy + d * h * 0.43);
-      ctx.lineTo(cx - w * 0.12, cy + d * h * 0.45);
-      ctx.lineTo(cx - w * 0.32, cy + d * h * 0.42);
-      ctx.bezierCurveTo(cx - w * 0.45, cy + d * h * 0.35, cx - w * 0.45, cy - d * h * 0.32, cx, cy - d * h * 0.4);
+      ctx.moveTo(cx, cy - d * h * 0.42);
+      ctx.lineTo(cx + w * 0.42, cy - d * h * 0.28);
+      ctx.lineTo(cx + w * 0.42, cy + d * h * 0.32);
+      ctx.lineTo(cx + w * 0.28, cy + d * h * 0.44);
+      ctx.lineTo(cx + w * 0.08, cy + d * h * 0.46);
+      ctx.lineTo(cx, cy + d * h * 0.44);
+      ctx.lineTo(cx - w * 0.08, cy + d * h * 0.46);
+      ctx.lineTo(cx - w * 0.28, cy + d * h * 0.44);
+      ctx.lineTo(cx - w * 0.42, cy + d * h * 0.32);
+      ctx.lineTo(cx - w * 0.42, cy - d * h * 0.28);
       ctx.closePath();
 
       const g = ctx.createLinearGradient(x, y, x + w, y + h);
       g.addColorStop(0, color);
-      g.addColorStop(0.5, color);
-      g.addColorStop(1, shade(color, -20));
+      g.addColorStop(0.4, color);
+      g.addColorStop(1, shade(color, -22));
       ctx.fillStyle = g;
       ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 1.2;
       ctx.stroke();
 
-      ctx.fillStyle = 'rgba(10,12,18,0.9)';
+      ctx.fillStyle = 'rgba(8,10,16,0.95)';
       ctx.beginPath();
-      ctx.ellipse(cx, cy - d * h * 0.06, w * 0.2, h * 0.16, 0, 0, Math.PI * 2);
+      ctx.moveTo(cx - w * 0.18, cy - d * h * 0.02);
+      ctx.lineTo(cx + w * 0.18, cy - d * h * 0.02);
+      ctx.lineTo(cx + w * 0.14, cy + d * h * 0.12);
+      ctx.lineTo(cx - w * 0.14, cy + d * h * 0.12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      ctx.fillStyle = '#fffef8';
+      ctx.beginPath();
+      ctx.arc(cx - w * 0.2, cy - d * h * 0.36, w * 0.055, 0, Math.PI * 2);
+      ctx.arc(cx + w * 0.2, cy - d * h * 0.36, w * 0.055, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = '#fffef5';
+      ctx.fillStyle = '#ff3333';
       ctx.beginPath();
-      ctx.arc(cx - w * 0.16, cy - d * h * 0.35, w * 0.05, 0, Math.PI * 2);
-      ctx.arc(cx + w * 0.16, cy - d * h * 0.35, w * 0.05, 0, Math.PI * 2);
+      ctx.arc(cx - w * 0.2, cy + d * h * 0.36, w * 0.05, 0, Math.PI * 2);
+      ctx.arc(cx + w * 0.2, cy + d * h * 0.36, w * 0.05, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = '#ff4444';
-      ctx.beginPath();
-      ctx.arc(cx - w * 0.18, cy + d * h * 0.35, w * 0.045, 0, Math.PI * 2);
-      ctx.arc(cx + w * 0.18, cy + d * h * 0.35, w * 0.045, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = '#1a1e26';
+      ctx.strokeStyle = '#111';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(cx - w * 0.35, cy + d * h * 0.42);
-      ctx.lineTo(cx + w * 0.35, cy + d * h * 0.42);
+      ctx.moveTo(cx - w * 0.38, cy + d * h * 0.43);
+      ctx.lineTo(cx + w * 0.38, cy + d * h * 0.43);
       ctx.stroke();
 
       ctx.restore();
@@ -476,8 +539,19 @@
 
     function draw() {
       drawRoad();
-      drawCar(player.x, player.y, player.width, player.height, '#00d4aa', true);
-      for (const o of obstacles) drawCar(o.x, o.y, o.width, o.height, o.color || '#3b82f6', false);
+      let shakeX = 0, shakeY = 0;
+      if (isCrashing) {
+        const t = crashFrame / CRASH_DURATION;
+        shakeX = (Math.random() - 0.5) * 12 * (1 - t);
+        shakeY = (Math.random() - 0.5) * 8 * (1 - t);
+      }
+      drawLamborghini(player.x, player.y, player.width, player.height, '#ffd700', true, shakeX, shakeY);
+      for (const o of obstacles) drawLamborghini(o.x, o.y, o.width, o.height, o.color || '#3b82f6', false, 0, 0);
+      if (isCrashing) {
+        const t = crashFrame / CRASH_DURATION;
+        ctx.fillStyle = `rgba(255, 50, 50, ${0.4 * (1 - t)})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
     }
 
     function gameLoop() {
@@ -522,36 +596,94 @@
       });
     });
 
-    let touchStartX = 0;
+    let touchStartX = 0, touchStartY = 0, touchStartTime = 0, swipeHandled = false;
+    const SWIPE_THRESHOLD = 30;
+    const SWIPE_MAX_TIME = 300;
+
     canvas.addEventListener('touchstart', e => {
-      if (!gameRunning) return;
+      if (!gameRunning || isCrashing) return;
       e.preventDefault();
-      touchStartX = e.touches[0].clientX;
+      const t = e.touches[0];
+      touchStartX = t.clientX;
+      touchStartY = t.clientY;
+      touchStartTime = Date.now();
+      swipeHandled = false;
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', e => {
+      if (!gameRunning || swipeHandled) return;
+      e.preventDefault();
     }, { passive: false });
 
     canvas.addEventListener('touchend', e => {
-      if (!gameRunning) return;
+      if (!gameRunning || isCrashing) return;
       e.preventDefault();
       const t = e.changedTouches[0];
-      if (!t) return;
+      if (!t || swipeHandled) return;
       const dx = t.clientX - touchStartX;
-      if (Math.abs(dx) > 35) dx > 0 ? moveRight() : moveLeft();
-      else {
+      const dy = t.clientY - touchStartY;
+      const dt = Date.now() - touchStartTime;
+      if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy) && dt < SWIPE_MAX_TIME) {
+        swipeHandled = true;
+        lastClickWasTouch = true;
+        dx > 0 ? moveRight() : moveLeft();
+      } else {
         const r = canvas.getBoundingClientRect();
-        ((t.clientX - r.left) / r.width < 0.5) ? moveLeft() : moveRight();
+        if (t.clientX >= r.left && t.clientX <= r.right && t.clientY >= r.top && t.clientY <= r.bottom) {
+          swipeHandled = true;
+          lastClickWasTouch = true;
+          ((t.clientX - r.left) / r.width < 0.5) ? moveLeft() : moveRight();
+        }
       }
     }, { passive: false });
 
+    canvas.addEventListener('touchcancel', e => {
+      swipeHandled = true;
+    }, { passive: false });
+
+    let lastClickWasTouch = false;
     canvas.addEventListener('click', e => {
-      if (!gameRunning) return;
+      if (!gameRunning || isCrashing) return;
+      if (lastClickWasTouch) {
+        lastClickWasTouch = false;
+        return;
+      }
       const r = canvas.getBoundingClientRect();
-      ((e.clientX - r.left) / r.width < 0.5) ? moveLeft() : moveRight();
+      if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
+        ((e.clientX - r.left) / r.width < 0.5) ? moveLeft() : moveRight();
+      }
     });
+
 
     document.addEventListener('keydown', e => {
       if (!gameRunning) return;
       if (e.key === 'ArrowLeft') { e.preventDefault(); moveLeft(); }
       else if (e.key === 'ArrowRight') { e.preventDefault(); moveRight(); }
+      else if (e.key === ' ' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        activateBoost();
+      }
+    });
+
+    function activateBoost() {
+      if (!gameRunning || isCrashing) return;
+      const now = Date.now();
+      if (now - lastTouchTime < TOUCH_DEBOUNCE) return;
+      lastTouchTime = now;
+      boostActive = true;
+      boostEndTime = now + BOOST_DURATION;
+      document.getElementById('boostIndicator').classList.add('active');
+    }
+
+    document.querySelector('.game-container').addEventListener('touchstart', e => {
+      if (!e.target.closest('button')) activateBoost();
+    }, { passive: true });
+
+    document.querySelector('.game-container').addEventListener('mousedown', e => {
+      if (!e.target.closest('button')) activateBoost();
+    });
+    document.querySelector('.game-container').addEventListener('click', e => {
+      if (!e.target.closest('button')) activateBoost();
     });
 
     window.addEventListener('resize', resizeCanvas);
