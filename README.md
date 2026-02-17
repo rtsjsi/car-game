@@ -1,42 +1,52 @@
-# 🏎️ Car Racing Game
+# Bike Rush — Motorcycle Racing Game
 
-A simple, kid-friendly car racing game that works on both **mobile** and **web**.
+A fast-paced bike racing game built with **Vite + React + TypeScript**. Avoid oncoming bikes, find the clear lane, and beat your high score.
+
+## Tech Stack
+
+- **Vite** — Fast build tool and dev server
+- **React 18** — UI framework
+- **TypeScript** — Type safety
+- **Canvas API** — Game rendering
 
 ## How to Play
 
-- **Avoid** the blue cars coming toward you
-- **Steer** your red car left or right to stay in a lane
-- **Score** points for each car you pass safely
-- Try to beat your best score!
+- **Avoid** the oncoming bikes
+- **Steer** left or right to stay in a lane
+- **Boost** by tapping anywhere or pressing Space/Up
+- **Score** points for each bike you pass
+- One lane is always clear — find it!
 
 ## Controls
 
-### On Desktop/Web
-- **←** (Left arrow) – Move left
-- **→** (Right arrow) – Move right
+| Device | Steer | Boost |
+|--------|-------|-------|
+| **Desktop** | ← → arrow keys | Space or Up arrow |
+| **Mobile** | Swipe or tap left/right | Tap anywhere |
 
-### On Mobile
-- Tap the **◀** button to move left
-- Tap the **▶** button to move right
+## Development
 
-## How to Run
+```bash
+npm install
+npm run dev
+```
 
-1. **Option A – Open directly**  
-   Double-click `index.html` to open it in your browser.
+Open [http://localhost:5173](http://localhost:5173)
 
-2. **Option B – Local server (recommended for mobile testing)**  
-   ```bash
-   npx serve .
-   ```
-   Then open the URL shown (e.g. `http://localhost:3000`) on your computer or phone.
+## Build
 
-3. **Option C – Deploy**  
-   Upload the `index.html` file to any web host (e.g. GitHub Pages, Netlify) to play from anywhere.
+```bash
+npm run build
+npm run preview
+```
+
+The built files are in `dist/` — deploy to any static host (Vercel, Netlify, GitHub Pages).
 
 ## Features
 
-- ✅ Works on phones, tablets, and desktops
-- ✅ Touch controls for mobile
-- ✅ Keyboard controls for web
-- ✅ Best score saved in the browser
-- ✅ Simple, colorful graphics for kids
+- Responsive — works on mobile and desktop
+- Touch controls — swipe to steer
+- Speed boost — tap anywhere
+- Fair spawn logic — always one lane free
+- Crash animation
+- Best score saved in browser
