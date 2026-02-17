@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>🏎️ Car Racing Game</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Comic Sans MS', 'Chalkboard', cursive, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    h1 {
+      color: #ffd700;
+      font-size: clamp(1.5rem, 5vw, 2.5rem);
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+
+    .game-container {
+      position: relative;
+      background: #2d2d44;
+      border-radius: 12px;
+      padding: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    #gameCanvas {
+      display: block;
+      background: #333;
+      border-radius: 8px;
+      max-width: 100%;
+      height: auto;
+    }
+
+    .score-board {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      color: #fff;
+      font-size: 1.2rem;
+    }
+
+    .controls {
+      display: flex;
+      gap: 20px;
+      margin-top: 15px;
+      justify-content: center;
+      padding: 10px;
+    }
+
+    .control-btn {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 4px solid #ffd700;
+      background: linear-gradient(145deg, #ff6b6b, #ee5a5a);
+      color: white;
+      font-size: 2rem;
+      font-weight: bold;
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      transition: transform 0.1s;
+    }
+
+    .control-btn:active {
+      transform: scale(0.95);
+    }
+
+    .control-btn.right {
+      background: linear-gradient(145deg, #4ecdc4, #45b7aa);
+    }
+
+    .desktop-hint {
+      color: #aaa;
+      font-size: 0.9rem;
+      margin-top: 10px;
+    }
+
+    @media (min-width: 768px) {
+      .controls {
+        display: none;
+      }
+    }
+
+    @media (max-width: 767px) {
+      .desktop-hint {
+        display: none;
+      }
+    }
+
+    .overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      color: white;
+      z-index: 10;
+    }
+
+    .overlay h2 {
+      font-size: 2rem;
+      margin-bottom: 15px;
+      color: #ffd700;
+    }
+
+    .overlay p {
+      margin-bottom: 20px;
+      font-size: 1.2rem;
+    }
+
+    .start-btn {
+      padding: 15px 40px;
+      font-size: 1.5rem;
+      font-family: inherit;
+      background: linear-gradient(145deg, #4ecdc4, #45b7aa);
+      border: none;
+      border-radius: 25px;
+      color: white;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      transition: transform 0.1s;
+    }
+
+    .start-btn:hover, .start-btn:active {
+      transform: scale(1.05);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <h1>🏎️ Car Racing Game</h1>
+  <div class="game-container">
+    <div class="score-board">
+      <span>Score: <strong id="score">0</strong></span>
+      <span>Best: <strong id="best">0</strong></span>
+    </div>
+    <div id="startOverlay" class="overlay">
+      <h2>Ready to Race! 🏁</h2>
+      <p>Avoid the other cars!</p>
+      <button class="start-btn" id="startBtn">Start Game</button>
+    </div>
+    <div id="gameOverOverlay" class="overlay hidden">
+      <h2>Game Over! 😢</h2>
+      <p>Score: <strong id="finalScore">0</strong></p>
+      <button class="start-btn" id="restartBtn">Play Again</button>
+    </div>
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+  </div>
+  <div class="controls">
+    <button class="control-btn left" id="leftBtn">◀</button>
+    <button class="control-btn right" id="rightBtn">▶</button>
+  </div>
+  <p class="desktop-hint">Use ← → arrow keys to steer</p>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Responsive canvas sizing
+    function resizeCanvas() {
+      const container = canvas.parentElement;
+      const maxWidth = Math.min(400, window.innerWidth - 40);
+      const aspectRatio = 400 / 600;
+      canvas.width = maxWidth;
+      canvas.height = maxWidth / aspectRatio;
+      if (gameRunning) draw();
+    }
+
+    // Game state
+    let gameRunning = false;
+    let score = 0;
+    let bestScore = parseInt(localStorage.getItem('carGameBest') || '0');
+    let animationId;
+
+    // Player car
+    const player = {
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      speed: 8,
+      lane: 1
+    };
+
+    const LANES = 3;
+    let obstacles = [];
+    let roadOffset = 0;
+
+    function initGame() {
+      const laneWidth = canvas.width / LANES;
+      player.width = laneWidth * 0.7;
+      player.height = player.width * 1.5;
+      player.lane = 1;
+      player.x = laneWidth * player.lane + (laneWidth - player.width) / 2;
+      player.y = canvas.height - player.height - 30;
+      obstacles = [];
+      score = 0;
+      roadOffset = 0;
+      document.getElementById('score').textContent = '0';
+      document.getElementById('best').textContent = bestScore;
+    }
+
+    function createObstacle() {
+      const laneWidth = canvas.width / LANES;
+      const lane = Math.floor(Math.random() * LANES);
+      const width = laneWidth * 0.7;
+      const height = width * 1.5;
+      obstacles.push({
+        x: lane * laneWidth + (laneWidth - width) / 2,
+        y: -height,
+        width,
+        height,
+        lane
+      });
+    }
+
+    function update() {
+      if (!gameRunning) return;
+
+      const laneWidth = canvas.width / LANES;
+      roadOffset += 5;
+      if (roadOffset > 40) roadOffset = 0;
+
+      // Move player
+      player.x = laneWidth * player.lane + (laneWidth - player.width) / 2;
+
+      // Spawn obstacles
+      if (Math.random() < 0.02) createObstacle();
+
+      // Move obstacles
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        obstacles[i].y += 4 + score * 0.01;
+        if (obstacles[i].y > canvas.height) {
+          obstacles.splice(i, 1);
+          score += 10;
+          document.getElementById('score').textContent = score;
+          if (score > bestScore) {
+            bestScore = score;
+            localStorage.setItem('carGameBest', bestScore);
+            document.getElementById('best').textContent = bestScore;
+          }
+        }
+      }
+
+      // Collision detection
+      for (const obs of obstacles) {
+        if (player.lane === obs.lane &&
+            player.y < obs.y + obs.height &&
+            player.y + player.height > obs.y) {
+          gameOver();
+          return;
+        }
+      }
+    }
+
+    function drawRoad() {
+      const laneWidth = canvas.width / LANES;
+      ctx.fillStyle = '#444';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Road markings
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 3;
+      for (let i = 1; i < LANES; i++) {
+        const x = i * laneWidth;
+        for (let y = roadOffset % 40; y < canvas.height; y += 40) {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x, y + 20);
+          ctx.stroke();
+        }
+      }
+    }
+
+    function drawCar(x, y, w, h, color) {
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = '#87CEEB';
+      ctx.fillRect(x + w * 0.1, y + h * 0.1, w * 0.3, h * 0.25);
+      ctx.fillRect(x + w * 0.6, y + h * 0.1, w * 0.3, h * 0.25);
+    }
+
+    function draw() {
+      drawRoad();
+      drawCar(player.x, player.y, player.width, player.height, '#e74c3c');
+      for (const obs of obstacles) {
+        drawCar(obs.x, obs.y, obs.width, obs.height, '#3498db');
+      }
+    }
+
+    function gameLoop() {
+      update();
+      draw();
+      if (gameRunning) {
+        animationId = requestAnimationFrame(gameLoop);
+      }
+    }
+
+    function startGame() {
+      document.getElementById('startOverlay').classList.add('hidden');
+      document.getElementById('gameOverOverlay').classList.add('hidden');
+      initGame();
+      gameRunning = true;
+      gameLoop();
+    }
+
+    function gameOver() {
+      gameRunning = false;
+      cancelAnimationFrame(animationId);
+      document.getElementById('finalScore').textContent = score;
+      document.getElementById('gameOverOverlay').classList.remove('hidden');
+    }
+
+    // Controls
+    document.getElementById('startBtn').addEventListener('click', startGame);
+    document.getElementById('restartBtn').addEventListener('click', startGame);
+
+    document.getElementById('leftBtn').addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (player.lane > 0) player.lane--;
+    }, { passive: false });
+
+    document.getElementById('rightBtn').addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (player.lane < LANES - 1) player.lane++;
+    }, { passive: false });
+
+    document.getElementById('leftBtn').addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      if (gameRunning && player.lane > 0) player.lane--;
+    });
+
+    document.getElementById('rightBtn').addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      if (gameRunning && player.lane < LANES - 1) player.lane++;
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (!gameRunning) return;
+      if (e.key === 'ArrowLeft' && player.lane > 0) {
+        e.preventDefault();
+        player.lane--;
+      } else if (e.key === 'ArrowRight' && player.lane < LANES - 1) {
+        e.preventDefault();
+        player.lane++;
+      }
+    });
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    initGame();
+    draw();
+  </script>
+</body>
+</html>
