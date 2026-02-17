@@ -32,31 +32,38 @@
 
     .game-container {
       position: relative;
-      background: #2d2d44;
-      border-radius: 12px;
-      padding: 8px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      background: linear-gradient(145deg, #2d2d44 0%, #1e1e2e 100%);
+      border-radius: 16px;
+      padding: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,215,0,0.2);
     }
 
     #gameCanvas {
       display: block;
-      background: #333;
-      border-radius: 8px;
+      background: #111;
+      border-radius: 10px;
       max-width: 100%;
       height: auto;
       outline: none;
       cursor: pointer;
+      border: 2px solid rgba(255,215,0,0.3);
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
     }
 
     .score-board {
       display: flex;
       justify-content: space-between;
-      padding: 8px 12px;
-      background: rgba(0,0,0,0.3);
-      border-radius: 8px;
-      margin-bottom: 8px;
+      padding: 10px 16px;
+      background: linear-gradient(135deg, rgba(0,0,0,0.5) 0%, rgba(20,20,30,0.6) 100%);
+      border-radius: 10px;
+      margin-bottom: 10px;
       color: #fff;
       font-size: 1.2rem;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .score-board strong {
+      color: #ffd700;
     }
 
     .controls {
@@ -105,9 +112,19 @@
       }
     }
 
+    .mobile-hint {
+      display: none;
+      color: #aaa;
+      font-size: 0.9rem;
+      margin-top: 10px;
+    }
+
     @media (max-width: 767px) {
       .desktop-hint {
         display: none;
+      }
+      .mobile-hint {
+        display: block;
       }
     }
 
@@ -183,11 +200,14 @@
     <button type="button" class="control-btn left" id="leftBtn">◀</button>
     <button type="button" class="control-btn right" id="rightBtn">▶</button>
   </div>
-  <p class="desktop-hint">Use ← → arrow keys, tap canvas, or use buttons to steer</p>
+  <p class="desktop-hint">← → keys, tap canvas, or buttons to steer</p>
+  <p class="mobile-hint">Swipe left/right or tap to steer</p>
 
   <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
     // Responsive canvas sizing
     function resizeCanvas() {
@@ -233,6 +253,8 @@
       document.getElementById('best').textContent = bestScore;
     }
 
+    const OBSTACLE_COLORS = ['#3498db', '#9b59b6', '#1abc9c', '#e67e22', '#f1c40f'];
+
     function createObstacle() {
       const laneWidth = canvas.width / LANES;
       const lane = Math.floor(Math.random() * LANES);
@@ -243,7 +265,8 @@
         y: -height,
         width,
         height,
-        lane
+        lane,
+        color: OBSTACLE_COLORS[Math.floor(Math.random() * OBSTACLE_COLORS.length)]
       });
     }
 
@@ -288,36 +311,138 @@
 
     function drawRoad() {
       const laneWidth = canvas.width / LANES;
-      ctx.fillStyle = '#444';
+
+      // Asphalt - dark gradient (full width first)
+      const roadGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      roadGrad.addColorStop(0, '#2a2a2a');
+      roadGrad.addColorStop(0.5, '#1a1a1a');
+      roadGrad.addColorStop(1, '#252525');
+      ctx.fillStyle = roadGrad;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Road markings
-      ctx.strokeStyle = '#fff';
+      // Lane markings - dashed white
+      ctx.strokeStyle = '#fff8dc';
       ctx.lineWidth = 3;
       for (let i = 1; i < LANES; i++) {
         const x = i * laneWidth;
-        for (let y = roadOffset % 40; y < canvas.height; y += 40) {
+        for (let y = (roadOffset % 50) - 50; y < canvas.height + 50; y += 50) {
           ctx.beginPath();
           ctx.moveTo(x, y);
-          ctx.lineTo(x, y + 20);
+          ctx.lineTo(x, Math.min(y + 30, canvas.height));
           ctx.stroke();
         }
       }
+
+      // Grass curbs on edges
+      const grassWidth = 18;
+      const grassGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      grassGrad.addColorStop(0, '#2d5a27');
+      grassGrad.addColorStop(0.5, '#3d7a35');
+      grassGrad.addColorStop(1, '#2d5a27');
+      ctx.fillStyle = grassGrad;
+      ctx.fillRect(0, 0, grassWidth, canvas.height);
+      ctx.fillRect(canvas.width - grassWidth, 0, grassWidth, canvas.height);
+
+      // Road edge lines (on top of grass)
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(grassWidth, 0);
+      ctx.lineTo(grassWidth, canvas.height);
+      ctx.moveTo(canvas.width - grassWidth, 0);
+      ctx.lineTo(canvas.width - grassWidth, canvas.height);
+      ctx.stroke();
     }
 
-    function drawCar(x, y, w, h, color) {
-      ctx.fillStyle = color;
-      ctx.fillRect(x, y, w, h);
-      ctx.fillStyle = '#87CEEB';
-      ctx.fillRect(x + w * 0.1, y + h * 0.1, w * 0.3, h * 0.25);
-      ctx.fillRect(x + w * 0.6, y + h * 0.1, w * 0.3, h * 0.25);
+    function drawSportsCar(x, y, w, h, color, facingUp = true) {
+      const dir = facingUp ? 1 : -1;
+      ctx.save();
+
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+
+      // Sports car body - wedge/supercar shape (top-down)
+      ctx.beginPath();
+      const f = dir;
+      ctx.moveTo(cx, cy - f * h * 0.42);           // pointed nose
+      ctx.bezierCurveTo(
+        cx + w * 0.48, cy - f * h * 0.35,
+        cx + w * 0.48, cy + f * h * 0.38,
+        cx + w * 0.35, cy + f * h * 0.45
+      );
+      ctx.lineTo(cx + w * 0.15, cy + f * h * 0.48);
+      ctx.lineTo(cx, cy + f * h * 0.46);
+      ctx.lineTo(cx - w * 0.15, cy + f * h * 0.48);
+      ctx.lineTo(cx - w * 0.35, cy + f * h * 0.45);
+      ctx.bezierCurveTo(
+        cx - w * 0.48, cy + f * h * 0.38,
+        cx - w * 0.48, cy - f * h * 0.35,
+        cx, cy - f * h * 0.42
+      );
+      ctx.closePath();
+
+      const bodyGrad = ctx.createLinearGradient(x, y, x + w, y + h);
+      bodyGrad.addColorStop(0, color);
+      bodyGrad.addColorStop(0.5, color);
+      bodyGrad.addColorStop(1, shadeColor(color, -25));
+      ctx.fillStyle = bodyGrad;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Cockpit/windshield
+      ctx.fillStyle = 'rgba(15,15,25,0.95)';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy - f * h * 0.05, w * 0.22, h * 0.18, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Headlights
+      ctx.fillStyle = '#fffef0';
+      ctx.shadowColor = '#ffeb99';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(cx - w * 0.18, cy - f * h * 0.38, w * 0.055, 0, Math.PI * 2);
+      ctx.arc(cx + w * 0.18, cy - f * h * 0.38, w * 0.055, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Taillights
+      ctx.fillStyle = '#ff3333';
+      ctx.beginPath();
+      ctx.arc(cx - w * 0.2, cy + f * h * 0.38, w * 0.05, 0, Math.PI * 2);
+      ctx.arc(cx + w * 0.2, cy + f * h * 0.38, w * 0.05, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rear spoiler
+      ctx.strokeStyle = '#222';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(cx - w * 0.38, cy + f * h * 0.44);
+      ctx.lineTo(cx + w * 0.38, cy + f * h * 0.44);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function shadeColor(color, percent) {
+      const hex = color.replace('#', '');
+      const num = parseInt(hex.length === 6 ? hex : hex.slice(0, 6), 16);
+      const amt = Math.round(2.55 * percent);
+      const R = Math.min(255, Math.max(0, (num >> 16) + amt));
+      const G = Math.min(255, Math.max(0, ((num >> 8) & 0xFF) + amt));
+      const B = Math.min(255, Math.max(0, (num & 0xFF) + amt));
+      return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
     }
 
     function draw() {
       drawRoad();
-      drawCar(player.x, player.y, player.width, player.height, '#e74c3c');
+      drawSportsCar(player.x, player.y, player.width, player.height, '#e74c3c', true);
       for (const obs of obstacles) {
-        drawCar(obs.x, obs.y, obs.width, obs.height, '#3498db');
+        drawSportsCar(obs.x, obs.y, obs.width, obs.height, obs.color || '#3498db', false);
       }
     }
 
@@ -376,15 +501,32 @@
       moveRight();
     });
 
-    // Tap left/right on canvas for mobile
+    // Swipe and tap on canvas for mobile
+    let touchStartX = 0;
     canvas.addEventListener('touchstart', (e) => {
       if (!gameRunning) return;
       e.preventDefault();
-      const touch = e.touches[0];
-      const rect = canvas.getBoundingClientRect();
-      const x = (touch.clientX - rect.left) / rect.width;
-      if (x < 0.5) moveLeft();
-      else moveRight();
+      touchStartX = e.touches[0].clientX;
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', (e) => {
+      if (!gameRunning) return;
+      e.preventDefault();
+      const touch = e.changedTouches[0];
+      if (!touch) return;
+      const touchEndX = touch.clientX;
+      const deltaX = touchEndX - touchStartX;
+      const swipeThreshold = 40;
+
+      if (Math.abs(deltaX) > swipeThreshold) {
+        if (deltaX > 0) moveRight();
+        else moveLeft();
+      } else {
+        const rect = canvas.getBoundingClientRect();
+        const x = (touchEndX - rect.left) / rect.width;
+        if (x < 0.5) moveLeft();
+        else moveRight();
+      }
     }, { passive: false });
 
     canvas.addEventListener('click', (e) => {
