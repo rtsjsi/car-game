@@ -596,7 +596,7 @@
       });
     });
 
-    let touchStartX = 0, touchStartY = 0, touchStartTime = 0, swipeHandled = false;
+    let touchStartX = 0, touchStartY = 0, touchStartTime = 0, swipeHandled = false, lastClickWasTouch = false;
     const SWIPE_THRESHOLD = 30;
     const SWIPE_MAX_TIME = 300;
 
@@ -641,7 +641,6 @@
       swipeHandled = true;
     }, { passive: false });
 
-    let lastClickWasTouch = false;
     canvas.addEventListener('click', e => {
       if (!gameRunning || isCrashing) return;
       if (lastClickWasTouch) {
